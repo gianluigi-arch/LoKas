@@ -6,6 +6,8 @@
 
 **Offline-First MSME Point-of-Sale & Client-Side Dynamic QRIS Engine**
 
+🔗 **Live Demo:** [lokas-two.vercel.app](https://lokas-two.vercel.app/)
+
 Built with **Next.js 15 (App Router)**, **React 19**, **TypeScript**, **Tailwind CSS v4**, **Dexie.js (IndexedDB)**, **Zustand**, **`qrcode.react`**, **`jsQR`**, and a custom **Service Worker**.
 
 > **Indonesian UI Context:** **LoKas** (*short for LokalKas*) is designed for Indonesian MSMEs (*UMKM*) with an Indonesian-language cashier interface—including **Kasir** (Cashier `/`), **Stok** (Inventory & Store/QRIS Setup `/stok`), **Laporan** (Daily Sales Report `/laporan`), **Tunai** (Cash), **Shift Pagi / Siang / Malam** assignment, and sync queue states **Menunggu Sync** (`PENDING`) / **Tersinkron** (`SYNCED`). Out of the box, it seeds a multi-category MSME retail & grocery catalog (*Toserba Laris Jaya*) across *Sembako & Ritel*, *Minuman & Segar*, and *Kudapan & Siap Saji*.
