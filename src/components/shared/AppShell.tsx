@@ -3,11 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { motion, useReducedMotion } from 'motion/react';
 import { BarChart3, LayoutGrid, Package, QrCode } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { db } from '@/lib/db';
 import { SAMPLE_STATIC_QRIS } from '@/lib/qris-engine';
 import { useUiStore } from '@/hooks/useUiStore';
+import { SplashIntro } from '@/components/SplashIntro';
 import { QrisSetupModal } from '@/components/qris/QrisSetupModal';
 
 interface AppShellProps {
@@ -22,11 +24,13 @@ const NAV_ITEMS = [
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+  const prefersReducedMotion = useReducedMotion();
   const merchant = useLiveQuery(() => db.merchant.get('default'));
   const { isQrisModalOpen, openQrisModal, closeQrisModal } = useUiStore();
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col lg:flex-row">
+      <SplashIntro />
       {/* Desktop Left Navigation Rail (>= 1024px) */}
       <aside className="hidden lg:flex lg:flex-col lg:justify-between lg:w-20 lg:shrink-0 lg:sticky lg:top-0 lg:h-screen bg-white border-r border-slate-200 py-5 px-2.5 z-30">
         <div className="flex flex-col items-center gap-6">
@@ -80,7 +84,14 @@ export function AppShell({ children }: AppShellProps) {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 min-w-0 flex flex-col pb-20 lg:pb-0">{children}</div>
+      <motion.div
+        initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+        className="flex-1 min-w-0 flex flex-col pb-20 lg:pb-0"
+      >
+        {children}
+      </motion.div>
 
       {/* Mobile Bottom Navigation Bar (< 1024px) */}
       <nav
