@@ -1,16 +1,56 @@
 'use client';
 
-import { useState } from 'react';
-import type { ProductRecord } from '@/lib/db';
+import { useEffect, useState } from 'react';
+import type { ProductCategory, ProductRecord } from '@/lib/db';
 import { formatRupiah } from '@/lib/format';
-import { ProductIcon } from '@/components/shared/ProductIcon';
-import { Minus, Plus } from 'lucide-react';
+import { Cookie, CupSoda, Minus, Package, Plus } from 'lucide-react';
 
 interface ProductCardProps {
   product: ProductRecord;
   quantityInCart: number;
   onAdd: (product: ProductRecord) => void;
   onDecrement: (productId: string) => void;
+}
+
+const CATEGORY_FALLBACK_STYLE: Record<
+  ProductCategory,
+  {
+    Icon: typeof Package;
+    surfaceClass: string;
+    iconBoxClass: string;
+    monogramClass: string;
+  }
+> = {
+  'Sembako & Ritel': {
+    Icon: Package,
+    surfaceClass: 'bg-amber-50/70',
+    iconBoxClass: 'bg-white text-amber-700 border border-amber-200/70',
+    monogramClass: 'text-amber-800/80 bg-white/80 border border-amber-200/60',
+  },
+  'Minuman & Segar': {
+    Icon: CupSoda,
+    surfaceClass: 'bg-sky-50/70',
+    iconBoxClass: 'bg-white text-sky-700 border border-sky-200/70',
+    monogramClass: 'text-sky-800/80 bg-white/80 border border-sky-200/60',
+  },
+  'Kudapan & Siap Saji': {
+    Icon: Cookie,
+    surfaceClass: 'bg-orange-50/70',
+    iconBoxClass: 'bg-white text-[#EA580C] border border-orange-200/70',
+    monogramClass: 'text-orange-800/80 bg-white/80 border border-orange-200/60',
+  },
+};
+
+function getProductMonogram(name: string): string {
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w.length > 0);
+  if (words.length === 0) return 'LK';
+  if (words.length === 1) {
+    return words[0].slice(0, 2).toUpperCase();
+  }
+  return `${words[0][0] ?? ''}${words[1][0] ?? ''}`.toUpperCase();
 }
 
 export function ProductCard({
@@ -21,11 +61,21 @@ export function ProductCard({
 }: ProductCardProps) {
   const [imgError, setImgError] = useState(false);
 
+  useEffect(() => {
+    setImgError(false);
+  }, [product.imageUrl]);
+
   const isOutOfStock = product.stock <= 0;
   const isLowStock = product.stock > 0 && product.stock <= 5;
   const isSelected = quantityInCart > 0;
   const atMaxStock = quantityInCart >= product.stock;
   const showImage = Boolean(product.imageUrl) && !imgError;
+
+  const fallbackMeta =
+    CATEGORY_FALLBACK_STYLE[product.category] ??
+    CATEGORY_FALLBACK_STYLE['Sembako & Ritel'];
+  const CategoryIcon = fallbackMeta.Icon;
+  const monogram = getProductMonogram(product.name);
 
   const renderStockBadge = () => {
     if (isOutOfStock) {
@@ -83,8 +133,16 @@ export function ProductCard({
         </span>
       )}
 
-      {/* Product Thumbnail */}
-      <div className="aspect-[4/3] w-full rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center mb-2.5">
+      {/* Product Thumbnail or Structured Category Fallback */}
+      <div
+        className={`aspect-[4/3] w-full rounded-xl overflow-hidden flex items-center justify-center mb-2.5 ${
+          showImage
+            ? 'bg-slate-100'
+            : isOutOfStock
+              ? 'bg-slate-100'
+              : fallbackMeta.surfaceClass
+        }`}
+      >
         {showImage ? (
           <img
             src={product.imageUrl}
@@ -96,7 +154,26 @@ export function ProductCard({
             }`}
           />
         ) : (
-          <ProductIcon icon={product.icon} className="w-8 h-8" muted={isOutOfStock} />
+          <div className="flex flex-col items-center justify-center gap-1.5 px-2">
+            <div
+              className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-xs ${
+                isOutOfStock
+                  ? 'bg-white/80 text-slate-400 border border-slate-200'
+                  : fallbackMeta.iconBoxClass
+              }`}
+            >
+              <CategoryIcon className="w-5 h-5" strokeWidth={1.9} />
+            </div>
+            <span
+              className={`rounded-md px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase ${
+                isOutOfStock
+                  ? 'bg-white/70 text-slate-400 border border-slate-200'
+                  : fallbackMeta.monogramClass
+              }`}
+            >
+              {monogram}
+            </span>
+          </div>
         )}
       </div>
 

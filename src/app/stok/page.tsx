@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Clock, Minus, Plus, QrCode, Search, X } from 'lucide-react';
+import { Clock, ImagePlus, Minus, Plus, QrCode, Search, Trash2, X } from 'lucide-react';
 import {
   addProduct,
   adjustProductStock,
@@ -22,6 +22,49 @@ const CATEGORY_ICON_MAP: Record<ProductCategory, ProductIconKey> = {
   'Kudapan & Siap Saji': 'toast',
 };
 
+const CATEGORY_SKU_PREFIX: Record<ProductCategory, string> = {
+  'Sembako & Ritel': 'SMB',
+  'Minuman & Segar': 'MNM',
+  'Kudapan & Siap Saji': 'KDP',
+};
+
+async function resizeProductImageToDataUrl(file: File): Promise<string> {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('Gagal membaca file gambar.'));
+      el.src = objectUrl;
+    });
+
+    const maxDim = 320;
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const width = Math.max(1, Math.round(img.width * scale));
+    const height = Math.max(1, Math.round(img.height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Canvas tidak tersedia di browser ini.');
+    }
+
+    ctx.fillStyle = '#F8FAFC';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+
+    const webp = canvas.toDataURL('image/webp', 0.75);
+    if (webp.startsWith('data:image/webp')) {
+      return webp;
+    }
+    return canvas.toDataURL('image/jpeg', 0.75);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export default function StokPage() {
   const merchant = useLiveQuery(() => db.merchant.get('default'));
   const products = useLiveQuery(() => db.products.toArray(), [], []);
@@ -39,6 +82,8 @@ export default function StokPage() {
     useState<ProductCategory>('Sembako & Ritel');
   const [newPrice, setNewPrice] = useState('');
   const [newStock, setNewStock] = useState('10');
+  const [newImageUrl, setNewImageUrl] = useState<string | null>(null);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
   const filteredProducts = useMemo(() => {
@@ -51,14 +96,40 @@ export default function StokPage() {
     );
   }, [products, searchQuery]);
 
+  const resetAddForm = () => {
+    setNewName('');
+    setNewSku('');
+    setNewCategory('Sembako & Ritel');
+    setNewPrice('');
+    setNewStock('10');
+    setNewImageUrl(null);
+    setIsProcessingImage(false);
+    setAddError(null);
+  };
+
+  const handleImagePick = async (file: File) => {
+    setAddError(null);
+    setIsProcessingImage(true);
+    try {
+      const resizedDataUrl = await resizeProductImageToDataUrl(file);
+      setNewImageUrl(resizedDataUrl);
+    } catch (err) {
+      setAddError(
+        err instanceof Error ? err.message : 'Gagal memproses foto produk.'
+      );
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
+
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddError(null);
     const priceNum = Number.parseInt(newPrice, 10);
     const stockNum = Number.parseInt(newStock, 10);
 
-    if (!newName.trim() || !newSku.trim()) {
-      setAddError('Nama produk dan SKU wajib diisi.');
+    if (!newName.trim()) {
+      setAddError('Nama produk wajib diisi.');
       return;
     }
     if (!Number.isFinite(priceNum) || priceNum <= 0) {
@@ -66,19 +137,21 @@ export default function StokPage() {
       return;
     }
 
+    const generatedSku = `${CATEGORY_SKU_PREFIX[newCategory]}-${String(
+      products.length + 1
+    ).padStart(3, '0')}`;
+
     await addProduct({
       name: newName,
-      sku: newSku,
+      sku: newSku.trim() || generatedSku,
       category: newCategory,
       price: priceNum,
       stock: Number.isFinite(stockNum) ? Math.max(0, stockNum) : 0,
       icon: CATEGORY_ICON_MAP[newCategory],
+      imageUrl: newImageUrl ?? undefined,
     });
 
-    setNewName('');
-    setNewSku('');
-    setNewPrice('');
-    setNewStock('10');
+    resetAddForm();
     setIsAddModalOpen(false);
   };
 
@@ -92,7 +165,10 @@ export default function StokPage() {
           </h1>
           <button
             type="button"
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={() => {
+              resetAddForm();
+              setIsAddModalOpen(true);
+            }}
             className="rounded-full bg-[#EA580C] hover:bg-[#C2410C] px-4 py-2 text-xs font-bold text-white shadow-sm shadow-orange-600/20 transition"
           >
             + Produk
@@ -285,7 +361,10 @@ export default function StokPage() {
               </h2>
               <button
                 type="button"
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => {
+                  resetAddForm();
+                  setIsAddModalOpen(false);
+                }}
                 className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"
               >
                 <X className="w-4 h-4" />
@@ -310,14 +389,13 @@ export default function StokPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    Kode SKU
+                    Kode SKU <span className="text-slate-400 font-normal">(Opsional)</span>
                   </label>
                   <input
                     type="text"
-                    required
                     value={newSku}
                     onChange={(e) => setNewSku(e.target.value)}
-                    placeholder="SMB-009"
+                    placeholder="Otomatis jika kosong"
                     className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm uppercase focus:outline-none focus:border-[#EA580C]"
                   />
                 </div>
@@ -372,6 +450,69 @@ export default function StokPage() {
                 </div>
               </div>
 
+              {/* Optional Product Photo Uploader */}
+              <div>
+                <span className="block text-xs font-semibold text-slate-600 mb-1">
+                  Foto Produk <span className="text-slate-400 font-normal">(Opsional)</span>
+                </span>
+                {newImageUrl ? (
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <img
+                        src={newImageUrl}
+                        alt="Preview foto produk"
+                        className="w-12 h-12 rounded-lg object-cover border border-slate-200 bg-white shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-[#0F172A] truncate">
+                          Foto siap disimpan
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          Dikompresi ≤320px untuk offline
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setNewImageUrl(null)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Hapus</span>
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50/70 hover:bg-slate-100/70 px-3 py-2.5 cursor-pointer transition">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-[#EA580C] shrink-0">
+                        <ImagePlus className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-[#0F172A]">
+                          {isProcessingImage
+                            ? 'Mengompresi gambar...'
+                            : '+ Pilih Foto Produk'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 truncate">
+                          Maks. 320px • Kosongkan untuk ikon kategori otomatis
+                        </p>
+                      </div>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isProcessingImage}
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void handleImagePick(file);
+                        e.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+
               {addError && (
                 <p className="text-xs font-semibold text-red-600">{addError}</p>
               )}
@@ -379,14 +520,18 @@ export default function StokPage() {
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => {
+                    resetAddForm();
+                    setIsAddModalOpen(false);
+                  }}
                   className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-[#EA580C] hover:bg-[#C2410C] px-4 py-2 text-xs font-bold text-white"
+                  disabled={isProcessingImage}
+                  className="rounded-xl bg-[#EA580C] hover:bg-[#C2410C] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                 >
                   Simpan Produk
                 </button>
