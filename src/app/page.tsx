@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Barcode, Search, UserCheck, X } from 'lucide-react';
-import { db, type ProductCategory } from '@/lib/db';
+import { db } from '@/lib/db';
 import { useCartStore } from '@/hooks/useCartStore';
 import { useNetworkSync } from '@/hooks/useNetworkSync';
 import { useShiftStore } from '@/hooks/useShiftStore';
@@ -16,15 +16,6 @@ import { MobileCartBar } from '@/components/pos/MobileCartBar';
 import { CartBottomSheet } from '@/components/pos/CartBottomSheet';
 import { PaymentModal } from '@/components/qris/PaymentModal';
 
-type CategoryFilter = 'Semua' | ProductCategory;
-
-const CATEGORIES: CategoryFilter[] = [
-  'Semua',
-  'Sembako & Ritel',
-  'Minuman & Segar',
-  'Kudapan & Siap Saji',
-];
-
 export default function KasirPage() {
   const merchant = useLiveQuery(() => db.merchant.get('default'));
   const products = useLiveQuery(() => db.products.toArray(), [], []);
@@ -34,14 +25,26 @@ export default function KasirPage() {
   const { shift, cashierName } = useShiftStore();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] =
-    useState<CategoryFilter>('Semua');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Semua');
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [isSkuModalOpen, setIsSkuModalOpen] = useState(false);
   const [skuInput, setSkuInput] = useState('');
   const [skuFeedback, setSkuFeedback] = useState<string | null>(null);
+
+  const categories = useMemo(() => {
+    const seen = new Set<string>();
+    for (const p of products) {
+      const cat = p.category.trim();
+      if (cat) seen.add(cat);
+    }
+    return ['Semua', ...Array.from(seen)];
+  }, [products]);
+
+  const activeCategory = categories.includes(selectedCategory)
+    ? selectedCategory
+    : 'Semua';
 
   const qtyByProductId = useMemo(() => {
     const map = new Map<string, number>();
@@ -55,14 +58,14 @@ export default function KasirPage() {
     const query = searchQuery.trim().toLowerCase();
     return products.filter((p) => {
       const matchesCategory =
-        selectedCategory === 'Semua' || p.category === selectedCategory;
+        activeCategory === 'Semua' || p.category === activeCategory;
       const matchesQuery =
         query.length === 0 ||
         p.name.toLowerCase().includes(query) ||
         p.sku.toLowerCase().includes(query);
       return matchesCategory && matchesQuery;
     });
-  }, [products, searchQuery, selectedCategory]);
+  }, [products, searchQuery, activeCategory]);
 
   const handleScanSku = (rawCode: string) => {
     const normalized = rawCode.trim().toLowerCase();
@@ -175,10 +178,10 @@ export default function KasirPage() {
             </div>
           </header>
 
-          {/* Category Filter Pills */}
+          {/* Dynamic Category Filter Pills */}
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-            {CATEGORIES.map((category) => {
-              const isActive = selectedCategory === category;
+            {categories.map((category) => {
+              const isActive = activeCategory === category;
               return (
                 <button
                   key={category}

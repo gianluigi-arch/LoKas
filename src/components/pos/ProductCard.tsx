@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { ProductCategory, ProductRecord } from '@/lib/db';
+import type { ProductRecord } from '@/lib/db';
 import { formatRupiah } from '@/lib/format';
-import { Cookie, CupSoda, Minus, Package, Plus } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 
 interface ProductCardProps {
   product: ProductRecord;
@@ -12,45 +12,31 @@ interface ProductCardProps {
   onDecrement: (productId: string) => void;
 }
 
-const CATEGORY_FALLBACK_STYLE: Record<
-  ProductCategory,
-  {
-    Icon: typeof Package;
-    surfaceClass: string;
-    iconBoxClass: string;
-    monogramClass: string;
-  }
-> = {
-  'Sembako & Ritel': {
-    Icon: Package,
-    surfaceClass: 'bg-amber-50/70',
-    iconBoxClass: 'bg-white text-amber-700 border border-amber-200/70',
-    monogramClass: 'text-amber-800/80 bg-white/80 border border-amber-200/60',
-  },
-  'Minuman & Segar': {
-    Icon: CupSoda,
-    surfaceClass: 'bg-sky-50/70',
-    iconBoxClass: 'bg-white text-sky-700 border border-sky-200/70',
-    monogramClass: 'text-sky-800/80 bg-white/80 border border-sky-200/60',
-  },
-  'Kudapan & Siap Saji': {
-    Icon: Cookie,
-    surfaceClass: 'bg-orange-50/70',
-    iconBoxClass: 'bg-white text-[#EA580C] border border-orange-200/70',
-    monogramClass: 'text-orange-800/80 bg-white/80 border border-orange-200/60',
-  },
+const KNOWN_CATEGORY_ACCENTS: Record<string, string> = {
+  'Sembako & Ritel': 'bg-amber-500',
+  'Minuman & Segar': 'bg-sky-500',
+  'Kudapan & Siap Saji': 'bg-orange-500',
+  Umum: 'bg-slate-500',
 };
 
-function getProductMonogram(name: string): string {
-  const words = name
-    .trim()
-    .split(/\s+/)
-    .filter((w) => w.length > 0);
-  if (words.length === 0) return 'LK';
-  if (words.length === 1) {
-    return words[0].slice(0, 2).toUpperCase();
+const CUSTOM_ACCENT_PALETTE = [
+  'bg-emerald-500',
+  'bg-indigo-500',
+  'bg-teal-500',
+  'bg-rose-500',
+  'bg-violet-500',
+];
+
+function getCategoryAccentClass(category: string): string {
+  const normalized = category.trim() || 'Umum';
+  if (KNOWN_CATEGORY_ACCENTS[normalized]) {
+    return KNOWN_CATEGORY_ACCENTS[normalized];
   }
-  return `${words[0][0] ?? ''}${words[1][0] ?? ''}`.toUpperCase();
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0;
+  }
+  return CUSTOM_ACCENT_PALETTE[hash % CUSTOM_ACCENT_PALETTE.length];
 }
 
 export function ProductCard({
@@ -70,12 +56,6 @@ export function ProductCard({
   const isSelected = quantityInCart > 0;
   const atMaxStock = quantityInCart >= product.stock;
   const showImage = Boolean(product.imageUrl) && !imgError;
-
-  const fallbackMeta =
-    CATEGORY_FALLBACK_STYLE[product.category] ??
-    CATEGORY_FALLBACK_STYLE['Sembako & Ritel'];
-  const CategoryIcon = fallbackMeta.Icon;
-  const monogram = getProductMonogram(product.name);
 
   const renderStockBadge = () => {
     if (isOutOfStock) {
@@ -99,22 +79,128 @@ export function ProductCard({
     );
   };
 
+  const renderMobileInlineStepper = () => (
+    <div
+      className="lg:hidden flex items-center justify-between rounded-xl border border-orange-200 bg-orange-50/70 p-1"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        aria-label={`Kurangi ${product.name}`}
+        onClick={() => onDecrement(product.id)}
+        className="w-7 h-7 rounded-lg bg-white border border-orange-200 text-[#EA580C] flex items-center justify-center active:scale-95"
+      >
+        <Minus className="w-3.5 h-3.5" />
+      </button>
+      <span className="text-xs font-bold text-[#EA580C] tabular-nums">
+        {quantityInCart}
+      </span>
+      <button
+        type="button"
+        aria-label={`Tambah ${product.name}`}
+        disabled={atMaxStock}
+        onClick={() => onAdd(product)}
+        className="w-7 h-7 rounded-lg bg-[#EA580C] text-white flex items-center justify-center active:scale-95 disabled:opacity-40"
+      >
+        <Plus className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+
+  const cardInteractionProps = {
+    role: 'button' as const,
+    tabIndex: isOutOfStock ? -1 : 0,
+    'aria-disabled': isOutOfStock,
+    onClick: () => {
+      if (!isOutOfStock && !atMaxStock) {
+        onAdd(product);
+      }
+    },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if ((e.key === 'Enter' || e.key === ' ') && !isOutOfStock && !atMaxStock) {
+        e.preventDefault();
+        onAdd(product);
+      }
+    },
+  };
+
+  // Typographic POS Tile when product has no image (or image fails to load)
+  if (!showImage) {
+    const accentClass = getCategoryAccentClass(product.category);
+    const categoryLabel = product.category.trim() || 'Umum';
+
+    return (
+      <div
+        {...cardInteractionProps}
+        className={`relative overflow-hidden bg-white rounded-xl p-4 pl-5 flex flex-col justify-between min-h-[210px] transition select-none ${
+          isOutOfStock
+            ? 'border border-slate-200 opacity-60 cursor-not-allowed'
+            : isSelected
+              ? 'border-2 border-[#EA580C] shadow-sm cursor-pointer'
+              : 'border border-slate-200 hover:border-orange-400 hover:shadow-sm cursor-pointer active:scale-[0.99]'
+        }`}
+      >
+        {/* 4px Deterministic Category Accent Bar */}
+        <span
+          aria-hidden="true"
+          className={`absolute inset-y-0 left-0 w-1 ${
+            isOutOfStock ? 'bg-slate-300' : accentClass
+          }`}
+        />
+
+        {/* Top Row: Category Badge & SKU (+ Selection Pill) */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 truncate max-w-[65%]">
+            {categoryLabel}
+          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[11px] font-mono text-slate-400">
+              {product.sku}
+            </span>
+            {isSelected && (
+              <span
+                aria-label={`Jumlah ${product.name} di keranjang: ${quantityInCart}`}
+                className="h-5 min-w-5 px-1.5 rounded-full bg-[#EA580C] text-white text-[11px] font-bold flex items-center justify-center tabular-nums"
+              >
+                {quantityInCart}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Middle (Hero Focus): Bold Scannable Product Name */}
+        <h3
+          className={`text-lg font-bold leading-snug line-clamp-2 my-auto py-3 ${
+            isOutOfStock ? 'text-slate-400' : 'text-slate-900'
+          }`}
+        >
+          {product.name}
+        </h3>
+
+        {/* Bottom Row: Price & Stock Pill (with Mobile Inline Stepper when active) */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p
+              className={`text-base font-extrabold tabular-nums ${
+                isOutOfStock ? 'text-slate-400' : 'text-slate-900'
+              }`}
+            >
+              {formatRupiah(product.price)}
+            </p>
+            <div className={isSelected ? 'hidden lg:block' : ''}>
+              {renderStockBadge()}
+            </div>
+          </div>
+          {isSelected && renderMobileInlineStepper()}
+        </div>
+      </div>
+    );
+  }
+
+  // Standard Photo-Top POS Card when product.imageUrl is present
   return (
     <div
-      role="button"
-      tabIndex={isOutOfStock ? -1 : 0}
-      aria-disabled={isOutOfStock}
-      onClick={() => {
-        if (!isOutOfStock && !atMaxStock) {
-          onAdd(product);
-        }
-      }}
-      onKeyDown={(e) => {
-        if ((e.key === 'Enter' || e.key === ' ') && !isOutOfStock && !atMaxStock) {
-          e.preventDefault();
-          onAdd(product);
-        }
-      }}
+      {...cardInteractionProps}
       className={`relative bg-white rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between transition select-none ${
         isOutOfStock
           ? 'border border-slate-200 opacity-60 cursor-not-allowed'
@@ -133,48 +219,17 @@ export function ProductCard({
         </span>
       )}
 
-      {/* Product Thumbnail or Structured Category Fallback */}
-      <div
-        className={`aspect-[4/3] w-full rounded-xl overflow-hidden flex items-center justify-center mb-2.5 ${
-          showImage
-            ? 'bg-slate-100'
-            : isOutOfStock
-              ? 'bg-slate-100'
-              : fallbackMeta.surfaceClass
-        }`}
-      >
-        {showImage ? (
-          <img
-            src={product.imageUrl}
-            alt={product.name}
-            loading="lazy"
-            onError={() => setImgError(true)}
-            className={`w-full h-full object-cover transition ${
-              isOutOfStock ? 'grayscale opacity-75' : ''
-            }`}
-          />
-        ) : (
-          <div className="flex flex-col items-center justify-center gap-1.5 px-2">
-            <div
-              className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-xs ${
-                isOutOfStock
-                  ? 'bg-white/80 text-slate-400 border border-slate-200'
-                  : fallbackMeta.iconBoxClass
-              }`}
-            >
-              <CategoryIcon className="w-5 h-5" strokeWidth={1.9} />
-            </div>
-            <span
-              className={`rounded-md px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase ${
-                isOutOfStock
-                  ? 'bg-white/70 text-slate-400 border border-slate-200'
-                  : fallbackMeta.monogramClass
-              }`}
-            >
-              {monogram}
-            </span>
-          </div>
-        )}
+      {/* Product Thumbnail */}
+      <div className="aspect-[4/3] w-full rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center mb-2.5">
+        <img
+          src={product.imageUrl}
+          alt={product.name}
+          loading="lazy"
+          onError={() => setImgError(true)}
+          className={`w-full h-full object-cover transition ${
+            isOutOfStock ? 'grayscale opacity-75' : ''
+          }`}
+        />
       </div>
 
       {/* Product Name & Price */}
@@ -199,34 +254,7 @@ export function ProductCard({
       <div className="mt-2.5">
         {isSelected ? (
           <>
-            {/* Mobile (<1024px): M-01 Inline Quantity Stepper */}
-            <div
-              className="lg:hidden flex items-center justify-between rounded-xl border border-orange-200 bg-orange-50/70 p-1"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                type="button"
-                aria-label={`Kurangi ${product.name}`}
-                onClick={() => onDecrement(product.id)}
-                className="w-7 h-7 rounded-lg bg-white border border-orange-200 text-[#EA580C] flex items-center justify-center active:scale-95"
-              >
-                <Minus className="w-3.5 h-3.5" />
-              </button>
-              <span className="text-xs font-bold text-[#EA580C] tabular-nums">
-                {quantityInCart}
-              </span>
-              <button
-                type="button"
-                aria-label={`Tambah ${product.name}`}
-                disabled={atMaxStock}
-                onClick={() => onAdd(product)}
-                className="w-7 h-7 rounded-lg bg-[#EA580C] text-white flex items-center justify-center active:scale-95 disabled:opacity-40"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Desktop (>=1024px): Stock Badge */}
+            {renderMobileInlineStepper()}
             <div className="hidden lg:block">{renderStockBadge()}</div>
           </>
         ) : (

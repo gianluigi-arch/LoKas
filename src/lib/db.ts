@@ -7,10 +7,7 @@ import {
   SAMPLE_STATIC_QRIS,
 } from './qris-engine';
 
-export type ProductCategory =
-  | 'Sembako & Ritel'
-  | 'Minuman & Segar'
-  | 'Kudapan & Siap Saji';
+export type ProductCategory = string;
 
 export type ShiftType = 'Pagi' | 'Siang' | 'Malam';
 
@@ -671,16 +668,38 @@ export async function addProduct(input: {
     id: uuidv4(),
     sku: input.sku.trim().toUpperCase(),
     name: input.name.trim(),
-    category: input.category,
+    category: input.category.trim() || 'Umum',
     price: Math.max(0, Math.round(input.price)),
     stock: Math.max(0, Math.round(input.stock)),
     icon: input.icon,
-    imageUrl: input.imageUrl,
+    imageUrl: input.imageUrl?.trim() || undefined,
     createdAt: now,
     updatedAt: now,
   };
   await db.products.add(record);
   return record;
+}
+
+export async function updateProduct(
+  productId: string,
+  input: {
+    name: string;
+    sku: string;
+    category: ProductCategory;
+    price: number;
+    stock: number;
+    imageUrl?: string;
+  }
+): Promise<void> {
+  await db.products.update(productId, {
+    name: input.name.trim(),
+    sku: input.sku.trim().toUpperCase(),
+    category: input.category.trim() || 'Umum',
+    price: Math.max(0, Math.round(input.price)),
+    stock: Math.max(0, Math.round(input.stock)),
+    imageUrl: input.imageUrl?.trim() || undefined,
+    updatedAt: Date.now(),
+  });
 }
 
 export async function updateMerchantQris(
