@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { ProductRecord } from '@/lib/db';
 import { formatRupiah } from '@/lib/format';
-import { Minus, Plus } from 'lucide-react';
+import { Cookie, CupSoda, Minus, Package, Plus, Tag } from 'lucide-react';
 
 interface ProductCardProps {
   product: ProductRecord;
@@ -12,11 +12,38 @@ interface ProductCardProps {
   onDecrement: (productId: string) => void;
 }
 
-const KNOWN_CATEGORY_ACCENTS: Record<string, string> = {
-  'Sembako & Ritel': 'bg-amber-500',
-  'Minuman & Segar': 'bg-sky-500',
-  'Kudapan & Siap Saji': 'bg-orange-500',
-  Umum: 'bg-slate-500',
+interface CategoryTileTheme {
+  accentBar: string;
+  surfaceBg: string;
+  watermarkColor: string;
+  Icon: typeof Package;
+}
+
+const KNOWN_CATEGORY_THEMES: Record<string, CategoryTileTheme> = {
+  'Sembako & Ritel': {
+    accentBar: 'bg-amber-500',
+    surfaceBg: 'bg-amber-50/60',
+    watermarkColor: 'text-amber-900',
+    Icon: Package,
+  },
+  'Minuman & Segar': {
+    accentBar: 'bg-sky-500',
+    surfaceBg: 'bg-sky-50/60',
+    watermarkColor: 'text-sky-900',
+    Icon: CupSoda,
+  },
+  'Kudapan & Siap Saji': {
+    accentBar: 'bg-orange-500',
+    surfaceBg: 'bg-orange-50/60',
+    watermarkColor: 'text-orange-900',
+    Icon: Cookie,
+  },
+  Umum: {
+    accentBar: 'bg-slate-500',
+    surfaceBg: 'bg-slate-50',
+    watermarkColor: 'text-slate-900',
+    Icon: Tag,
+  },
 };
 
 const CUSTOM_ACCENT_PALETTE = [
@@ -27,16 +54,21 @@ const CUSTOM_ACCENT_PALETTE = [
   'bg-violet-500',
 ];
 
-function getCategoryAccentClass(category: string): string {
+function getCategoryTileTheme(category: string): CategoryTileTheme {
   const normalized = category.trim() || 'Umum';
-  if (KNOWN_CATEGORY_ACCENTS[normalized]) {
-    return KNOWN_CATEGORY_ACCENTS[normalized];
+  if (KNOWN_CATEGORY_THEMES[normalized]) {
+    return KNOWN_CATEGORY_THEMES[normalized];
   }
   let hash = 0;
   for (let i = 0; i < normalized.length; i++) {
     hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0;
   }
-  return CUSTOM_ACCENT_PALETTE[hash % CUSTOM_ACCENT_PALETTE.length];
+  return {
+    accentBar: CUSTOM_ACCENT_PALETTE[hash % CUSTOM_ACCENT_PALETTE.length],
+    surfaceBg: 'bg-slate-50',
+    watermarkColor: 'text-slate-900',
+    Icon: Tag,
+  };
 }
 
 export function ProductCard({
@@ -126,31 +158,41 @@ export function ProductCard({
 
   // Typographic POS Tile when product has no image (or image fails to load)
   if (!showImage) {
-    const accentClass = getCategoryAccentClass(product.category);
+    const theme = getCategoryTileTheme(product.category);
+    const WatermarkIcon = theme.Icon;
     const categoryLabel = product.category.trim() || 'Umum';
 
     return (
       <div
         {...cardInteractionProps}
-        className={`relative overflow-hidden bg-white rounded-xl p-4 pl-5 flex flex-col justify-between min-h-[210px] transition select-none ${
+        className={`relative overflow-hidden rounded-xl p-4 pl-5 flex flex-col justify-between min-h-[210px] transition select-none ${
           isOutOfStock
-            ? 'border border-slate-200 opacity-60 cursor-not-allowed'
+            ? 'bg-slate-50 border border-slate-200 opacity-60 cursor-not-allowed'
             : isSelected
-              ? 'border-2 border-[#EA580C] shadow-sm cursor-pointer'
-              : 'border border-slate-200 hover:border-orange-400 hover:shadow-sm cursor-pointer active:scale-[0.99]'
+              ? `${theme.surfaceBg} border-2 border-[#EA580C] shadow-sm cursor-pointer`
+              : `${theme.surfaceBg} border border-slate-200 hover:border-orange-400 hover:shadow-sm cursor-pointer active:scale-[0.99]`
         }`}
       >
         {/* 4px Deterministic Category Accent Bar */}
         <span
           aria-hidden="true"
-          className={`absolute inset-y-0 left-0 w-1 ${
-            isOutOfStock ? 'bg-slate-300' : accentClass
+          className={`absolute inset-y-0 left-0 w-1 z-10 ${
+            isOutOfStock ? 'bg-slate-300' : theme.accentBar
+          }`}
+        />
+
+        {/* Decorative Category Watermark Icon */}
+        <WatermarkIcon
+          aria-hidden="true"
+          strokeWidth={1.6}
+          className={`pointer-events-none absolute -bottom-3 -right-3 w-20 h-20 opacity-[0.07] ${
+            isOutOfStock ? 'text-slate-900' : theme.watermarkColor
           }`}
         />
 
         {/* Top Row: Category Badge & SKU (+ Selection Pill) */}
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 truncate max-w-[65%]">
+        <div className="relative z-10 flex items-center justify-between gap-2">
+          <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-white/85 border border-slate-200/70 text-slate-700 truncate max-w-[65%]">
             {categoryLabel}
           </span>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -170,7 +212,7 @@ export function ProductCard({
 
         {/* Middle (Hero Focus): Bold Scannable Product Name */}
         <h3
-          className={`text-lg font-bold leading-snug line-clamp-2 my-auto py-3 ${
+          className={`relative z-10 text-lg font-bold leading-snug line-clamp-2 my-auto py-3 ${
             isOutOfStock ? 'text-slate-400' : 'text-slate-900'
           }`}
         >
@@ -178,7 +220,7 @@ export function ProductCard({
         </h3>
 
         {/* Bottom Row: Price & Stock Pill (with Mobile Inline Stepper when active) */}
-        <div className="space-y-2">
+        <div className="relative z-10 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <p
               className={`text-base font-extrabold tabular-nums ${
