@@ -8,9 +8,9 @@
 
 🔗 **Live Demo:** [lokas-two.vercel.app](https://lokas-two.vercel.app/)
 
-Built with **Next.js 15 (App Router)**, **React 19**, **TypeScript**, **Tailwind CSS v4**, **Dexie.js (IndexedDB)**, **Zustand**, **`qrcode.react`**, **`jsQR`**, and a custom **Service Worker**.
+Built with **Next.js 15 (App Router)**, **React 19**, **TypeScript**, **Tailwind CSS v4**, **Dexie.js (IndexedDB)**, **Zustand**, **Motion (`motion/react`)**, **`qrcode.react`**, **`jsQR`**, and a custom **Service Worker**.
 
-> **Indonesian UI Context:** **LoKas** (*short for LokalKas*) is designed for Indonesian MSMEs (*UMKM*) with an Indonesian-language cashier interface—including **Kasir** (Cashier `/`), **Stok** (Inventory & Store/QRIS Setup `/stok`), **Laporan** (Daily Sales Report `/laporan`), **Tunai** (Cash), **Shift Pagi / Siang / Malam** assignment, and sync queue states **Menunggu Sync** (`PENDING`) / **Tersinkron** (`SYNCED`). Out of the box, it seeds a multi-category MSME retail & grocery catalog (*Toserba Laris Jaya*) across *Sembako & Ritel*, *Minuman & Segar*, and *Kudapan & Siap Saji*.
+> **Indonesian UI Context:** **LoKas** (*short for LokalKas*) is designed for Indonesian MSMEs (*UMKM*) with an Indonesian-language cashier interface—including **Kasir** (Cashier `/`), **Stok** (Inventory & Store/QRIS Setup `/stok`), **Laporan** (Daily Sales Report `/laporan`), **Tunai** (Cash), **Shift Pagi / Siang / Malam** assignment, and sync queue states **Menunggu Sync** (`PENDING`) / **Tersinkron** (`SYNCED`). Out of the box, it seeds a multi-category MSME retail & grocery catalog (*Toserba Laris Jaya*) across *Sembako & Ritel*, *Minuman & Segar*, and *Kudapan & Siap Saji*, while allowing merchants to add custom or uncategorized (`Umum`) items on the fly.
 
 ---
 
@@ -42,7 +42,7 @@ Indonesian MSME retail and grocery stores (*toserba* / *warung sembako* such as 
 ### Local-First Storage & Atomic Transactions (`src/lib/db.ts`, `src/hooks/useNetworkSync.ts`)
 - **IndexedDB Schema (`LoKasDB`):** Version `2` defines four indexed object stores via `Dexie`:
   - `merchant` (`id`) — store identity (*Toserba Laris Jaya*), NMID, and active static QRIS string (`'default'`).
-  - `products` (`id, sku, category, name`) — multi-category retail & grocery FMCG items, pricing, SKU codes, studio product thumbnails (`imageUrl`), and live stock counts.
+  - `products` (`id, sku, category, name`) — multi-category retail & grocery FMCG items, pricing, SKU codes, optional product thumbnails (`imageUrl`), and live stock counts.
   - `transactions` (`id, invoiceNumber, createdAt, paymentMethod, syncStatus, shift`) — immutable order ledger tracking `PENDING` vs. `SYNCED` state alongside active `shift` (`Pagi`/`Siang`/`Malam`) and `cashierName`.
   - `transactionItems` (`id, transactionId, productId`) — line-item snapshots captured at checkout time.
 - **Idempotent Boot Seeding:** `seedInitialDataIfEmpty()` uses a shared module-level promise guard (`seedPromise`) so React 19 StrictMode double-invocations never duplicate seed records.
@@ -53,6 +53,11 @@ Indonesian MSME retail and grocery stores (*toserba* / *warung sembako* such as 
   4. Inserts the `transactions` record (`syncStatus: 'PENDING'`) and all `transactionItems` rows.
   5. Automatically rolls back the entire IndexedDB transaction if stock is insufficient or cash tendered is below the order total.
 - **Reactive Sync Queue (`useNetworkSync`):** Subscribes to `db.transactions.where('syncStatus').equals('PENDING').count()` via `useLiveQuery`. When `navigator.onLine` transitions back to `true` (or the cashier clicks *Sync Sekarang*), `syncNow()` batches pending IDs to `POST /api/sync` and atomically marks acknowledged transactions as `SYNCED` with `syncedAt`.
+
+### Adaptive POS Catalog & Motion UX (`ProductCard.tsx`, `SplashIntro.tsx`, `/stok`)
+- **Dynamic Custom & Optional Categories:** Adding products in `/stok` supports free-text custom categories, quick-select pills from existing IndexedDB categories, or leaving the field blank (defaulting to `Umum`), with cashier filter tabs derived dynamically from active catalog items.
+- **Adaptive No-Image Typographic Tiles & Client Compression:** Products without photos automatically render a category-accented **Typographic POS Tile** instead of broken or empty image boxes, while optional uploaded product photos are downscaled client-side via offscreen `<canvas>` (`320px` max width) to keep IndexedDB lightweight.
+- **Session-Once Entrance Choreography:** `SplashIntro.tsx` renders a 1.2s `motion/react` logo-build sequence (`LK` monogram stroke reveal) once per browser tab session (`sessionStorage`) while respecting `prefers-reduced-motion`.
 
 ### Client-Side EMVCo Dynamic QRIS Engine (`src/lib/qris-engine.ts`, `QrisSetupModal.tsx`, `PaymentModal.tsx`)
 Instead of relying on an external payment gateway API to generate dynamic QR codes, `qris-engine.ts` implements pure-TypeScript EMVCo Merchant-Presented Mode TLV manipulation:
